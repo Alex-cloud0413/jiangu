@@ -1,4 +1,7 @@
-// 见古 v0.1 内容库。人格称号、向量与现代启发均为编辑性产品假设，未经心理测量验证。
+import { WORLD_PEOPLE_A } from './people-world-a.js?v=0.2.0';
+import { WORLD_PEOPLE_B } from './people-world-b.js?v=0.2.0';
+
+// 见古 v0.2 内容库。人格称号、向量与现代启发均为编辑性产品假设，未经心理测量验证。
 // vector: [expression 内敛→外放, decision 逻辑→共情, planning 灵活→计划, openness 稳定→探索]。
 // 史实仅写入 events，来源由 sourceIds 指向；不把文学表达直接当作心理测量结果。
 
@@ -23,7 +26,7 @@ export const STRUGGLES = [
   }
 ];
 
-export const PEOPLE = [
+const CHINESE_PEOPLE = [
   {
     id: 'su-shi', name: '苏轼', era: '北宋', lifespan: '1037—1101', role: '文学家 · 书画家',
     title: '旷达的生活家', tagline: '风雨有时，日子仍值得认真过。',
@@ -313,3 +316,6 @@ export const PEOPLE = [
     ]
   }
 ];
+
+
+export const PEOPLE = [...CHINESE_PEOPLE.map(person => ({...person,country:"中国",region:"东亚",portraitSheet:"china"})),...WORLD_PEOPLE_A,...WORLD_PEOPLE_B];
