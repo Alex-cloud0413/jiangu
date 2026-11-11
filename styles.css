@@ -1,9 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
-
 :root {
   --paper:#f6f2ea; --surface:#fffdf8; --ink:#262c26; --muted:#5e665b;
   --line:#d3d7c9; --control:#7d8873; --red:#9e3828; --red-soft:#f0e2d8;
-  --sage:#e9ecdf; --serif:'Noto Serif SC','Songti SC','STSong',serif;
+  --sage:#e9ecdf; --serif:'Noto Serif SC','Songti SC','STSong','SimSun',serif;
   --sans:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
 }
 * {box-sizing:border-box}
