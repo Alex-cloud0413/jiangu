@@ -1,6 +1,6 @@
-import { QUESTIONS, validateAnswers } from './quiz.js?v=0.3.0';
-import { QUESTIONS as LEGACY_QUESTIONS } from './legacy-quiz.js?v=0.3.0';
-import { resolveResult } from './results.js?v=0.3.0';
+import { QUESTIONS, validateAnswers } from './quiz.js?v=0.4.0';
+import { QUESTIONS as LEGACY_QUESTIONS } from './legacy-quiz.js?v=0.4.0';
+import { resolveResult } from './results.js?v=0.4.0';
 
 export const STORAGE_KEY = 'jiangu:v2';
 export const LEGACY_STORAGE_KEY = 'jiangu:v1';

@@ -1,6 +1,6 @@
 import { PEOPLE } from './content.js?v=0.2.0';
-import { ASSESSMENT_VERSION, LEGACY_ASSESSMENT_VERSION, QUESTIONS, calculateProfile, getContext, rankPeople, validateAnswers } from './quiz.js?v=0.3.0';
-import { QUESTIONS as LEGACY_QUESTIONS } from './legacy-quiz.js?v=0.3.0';
+import { ASSESSMENT_VERSION, LEGACY_ASSESSMENT_VERSION, QUESTIONS, calculateProfile, getContext, rankPeople, validateAnswers } from './quiz.js?v=0.4.0';
+import { QUESTIONS as LEGACY_QUESTIONS } from './legacy-quiz.js?v=0.4.0';
 
 export const LIBRARY_VERSION = 'world-32-v1';
 export const LEGACY_LIBRARY_VERSION = 'china-8-v1';

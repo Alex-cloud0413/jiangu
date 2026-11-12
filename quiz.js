@@ -1,4 +1,4 @@
-import * as legacy from './legacy-quiz.js?v=0.3.0';
+import * as legacy from './legacy-quiz.js?v=0.4.0';
 
 /** Original editorial prompts and scores; this is not a validated psychological instrument. */
 export const ASSESSMENT_VERSION = 'scale-v1';
@@ -9,50 +9,50 @@ export const SCALE_OPTIONS = [
 ].map((text,index)=>Object.freeze({id:String(index+1),text,level:index}));
 
 function personality(id,dimension,title,reverse=false) {
-  return {id,kind:'personality',dimension,title,reverse,hint:'按平常的自己，选择符合程度。',
+  return {id,kind:'personality',dimension,title,reverse,hint:'按平常的自己来选。',
     options:SCALE_OPTIONS.map(option=>({...option,scoreStep:reverse ? 6-option.level : option.level,value:(reverse ? 6-option.level : option.level)*100/6}))};
 }
 function context(id,title,contextKey) {
-  return {id,kind:'context',title,contextKey,reverse:false,hint:'只考虑最近一段时间。',options:SCALE_OPTIONS.map(option=>({...option}))};
+  return {id,kind:'context',title,contextKey,reverse:false,hint:'只想想最近这段时间。',options:SCALE_OPTIONS.map(option=>({...option}))};
 }
 
 export const QUESTIONS = [
-  personality('s01','expression','和别人交流时，我的想法会更清晰。'),
-  personality('s02','decision','面对重要选择，我会先考虑人的感受。'),
-  personality('s03','planning','出行之前，我喜欢提前安排主要行程。'),
-  personality('s04','openness','空闲时，我更想尝试没有体验过的事。'),
-  personality('s05','expression','在陌生人的聚会里，我会主动聊天。'),
-  personality('s06','decision','发生分歧时，我会先核对事实和依据。',true),
-  personality('s07','planning','开始一件事后，我会边做边决定下一步。',true),
-  personality('s08','openness','完成一件事时，我更愿意用熟悉的方法。',true),
-  personality('s09','expression','有了新的感受，我更想先自己消化。',true),
-  personality('s10','decision','选择方案时，我在意相关的人能否接受。'),
-  personality('s11','planning','计划改变时，我希望尽快确定新安排。'),
-  personality('s12','openness','挑选读物时，陌生的领域会让我好奇。'),
-  personality('s13','expression','讨论时，我愿意说出还在成形的想法。'),
-  personality('s14','decision','判断一件事时，我看重标准是否一致。',true),
-  personality('s15','planning','学习新技能时，我喜欢按计划持续练习。'),
-  personality('s16','openness','生活保持熟悉的节奏，会让我更安心。',true),
-  personality('s17','expression','和人相处一整天后，我更想安静独处。',true),
-  personality('s18','decision','提出不同意见前，我会先理解对方的感受。'),
-  personality('s19','planning','处理复杂事务时，我会先列清单排顺序。'),
-  personality('s20','openness','遇到不同观点，我愿意换个角度想想。'),
-  personality('s21','expression','聊到熟悉的话题，我会主动表达观点。'),
-  personality('s22','decision','做决定时，我会先比较目标与实际结果。',true),
-  personality('s23','planning','和朋友见面时，我喜欢到场后再决定安排。',true),
-  personality('s24','openness','到陌生的城市生活，对我很有吸引力。'),
-  personality('s25','expression','说话之前，我习惯先把想法整理好。',true),
-  personality('s26','decision','两件事撞在一起时，我先考虑对人的影响。'),
-  personality('s27','planning','遇到新机会时，我愿意随时调整原计划。',true),
-  personality('s28','openness','熟练掌握一件事后，我更想探索新问题。'),
-  context('s29','最近，我正因为受挫或被否定而困扰。','setback'),
-  context('s30','最近，我对下一步该往哪里走感到迷茫。','direction'),
-  context('s31','最近，努力迟迟没有回报让我感到焦虑。','slow-growth'),
-  context('s32','最近，我有精力尝试一点新的改变。','energy'),
-  context('s33','遇到困扰时，我希望有人先听我说一说。','company'),
-  context('s34','此刻，我更希望先理解自己，再考虑行动。','understanding'),
-  personality('s35','planning','有清楚的步骤和时间安排，会让我更自在。'),
-  personality('s36','openness','比起不断变化，我更喜欢稳定的生活。',true),
+  personality('s01','expression','跟人聊着聊着，我常会把想法理顺。'),
+  personality('s02','decision','做重要决定时，我会先想想人的感受。'),
+  personality('s03','planning','出发前，我喜欢先把主要行程安排好。'),
+  personality('s04','openness','闲下来时，没试过的事会更吸引我。'),
+  personality('s05','expression','聚会里都是生面孔，我会主动找人聊聊。'),
+  personality('s06','decision','意见不合时，我会先弄清事实和依据。',true),
+  personality('s07','planning','我习惯边做边看，再决定下一步。',true),
+  personality('s08','openness','做事情时，我更愿意用自己熟悉的办法。',true),
+  personality('s09','expression','心里有了新的感受，我想先自己慢慢消化。',true),
+  personality('s10','decision','选方案时，我会在意受影响的人能不能接受。'),
+  personality('s11','planning','计划一变，我就想尽快把新安排定下来。'),
+  personality('s12','openness','挑书或文章时，陌生的领域会让我好奇。'),
+  personality('s13','expression','想法还没成形，我也愿意先和大家聊聊。'),
+  personality('s14','decision','做判断时，我在意前后是不是用同一套标准。',true),
+  personality('s15','planning','学新技能，我喜欢按计划一直练下去。'),
+  personality('s16','openness','日子按熟悉的节奏过，我心里会更踏实。',true),
+  personality('s17','expression','跟人待了一整天，我更想自己安静一会儿。',true),
+  personality('s18','decision','要提不同意见，我会先试着理解对方的感受。'),
+  personality('s19','planning','事情比较复杂，我会先列清单，排好顺序。'),
+  personality('s20','openness','听到不一样的看法，我愿意换个角度想想。'),
+  personality('s21','expression','聊到我熟悉的话题，我会主动说说自己的想法。'),
+  personality('s22','decision','回头看一个决定，我先看它有没有达到预期。',true),
+  personality('s23','planning','跟朋友见面，我喜欢到了再决定接下来做什么。',true),
+  personality('s24','openness','去一个陌生的城市生活，想想就让我心动。'),
+  personality('s25','expression','开口前，我习惯先把自己的想法理一理。',true),
+  personality('s26','decision','两件事撞到一起，我会先想想各自对人的影响。'),
+  personality('s27','planning','新机会来了，我愿意随时改改原先的计划。',true),
+  personality('s28','openness','一件事做熟了，我更想找个新问题试试。'),
+  context('s29','最近，挫折或被否定的经历让我心里难受。','setback'),
+  context('s30','最近，我拿不准下一步该往哪儿走。','direction'),
+  context('s31','最近，努力了却迟迟没回报，让我感到焦虑。','slow-growth'),
+  context('s32','最近，我有精力试着做一点改变。','energy'),
+  context('s33','有烦心事时，我希望有人先听我说一说。','company'),
+  context('s34','眼下，我更想先弄懂自己，再考虑怎么做。','understanding'),
+  personality('s35','planning','步骤和时间都安排清楚，我做事会更自在。'),
+  personality('s36','openness','比起不断变化，我更喜欢日子过得稳定。',true),
 ];
 
 const dimensionIds=DIMENSIONS.map(dimension=>dimension.id);

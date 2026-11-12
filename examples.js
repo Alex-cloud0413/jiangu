@@ -1,4 +1,4 @@
-import { DIMENSIONS, QUESTIONS } from './quiz.js?v=0.3.0';
+import { DIMENSIONS, QUESTIONS } from './quiz.js?v=0.4.0';
 
 /** Synthetic scale demonstration: search exact integer score steps, including reverse-scored items. */
 export function createExampleAnswers(vector) {

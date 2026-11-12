@@ -1,10 +1,11 @@
 import { PEOPLE, STRUGGLES } from './content.js?v=0.2.0';
-import { DIMENSIONS, QUESTIONS, calculateProfile, getContext, getAnswerEvidence, validateAnswers } from './quiz.js?v=0.3.0';
-import { createResult, refreshResult, resolveResult } from './results.js?v=0.3.0';
+import { DIMENSIONS, QUESTIONS, calculateProfile, getContext, getAnswerEvidence, validateAnswers } from './quiz.js?v=0.4.0';
+import { createResult, refreshResult, resolveResult } from './results.js?v=0.4.0';
 import { catalogPeople, REGION_ORDER } from './catalog.js?v=0.2.0';
-import { createExampleAnswers } from './examples.js?v=0.3.0';
+import { createExampleAnswers } from './examples.js?v=0.4.0';
+import { createAutoAdvance } from './auto-advance.js?v=0.4.0';
 
-import { STORAGE_KEY, LEGACY_STORAGE_KEY, emptyState, restoreScaleState, restoreLegacyState } from './session.js?v=0.3.0';
+import { STORAGE_KEY, LEGACY_STORAGE_KEY, emptyState, restoreScaleState, restoreLegacyState } from './session.js?v=0.4.0';
 const app = document.querySelector('#app');
 const infoDialog = document.querySelector('#info-dialog');
 const shareDialog = document.querySelector('#share-dialog');
@@ -23,6 +24,38 @@ let libraryRegion = '全部';
 let libraryQuery = '';
 let libraryLimit = 8;
 let dialogReturnFocus = null;
+let quizGeneration = 0;
+let keyboardBrowsingQuestion = null;
+const AUTO_ADVANCE_HINT = '选好即继续，也能返回修改。';
+const KEYBOARD_ADVANCE_HINT = '方向键选择，按 Enter 或空格继续。';
+const autoAdvance = createAutoAdvance({
+  isCurrent:snapshot=>location.hash==='#quiz' && !document.hidden && !infoDialog.open && !shareDialog.open && state===snapshot.record && quizGeneration===snapshot.generation && state.cursor===snapshot.cursor && QUESTIONS[state.cursor]?.id===snapshot.questionId && state.answers[snapshot.questionId]===snapshot.answer && document.querySelector('#question-form')===snapshot.form,
+  onAdvance:()=>advanceQuestion()
+});
+
+function cancelPendingAdvance() {
+  autoAdvance.cancel();
+  const keep=document.querySelector('#keep-answer');
+  if(keep)keep.hidden=!QUESTIONS[state.cursor]?.options.some(option=>option.id===state.answers[QUESTIONS[state.cursor].id]);
+  const hint=document.querySelector('#auto-advance-hint');
+  if(hint)hint.textContent=keyboardBrowsingQuestion===QUESTIONS[state.cursor]?.id ? KEYBOARD_ADVANCE_HINT : AUTO_ADVANCE_HINT;
+}
+function chooseDegree(input,auto=true) {
+  const q=QUESTIONS[state.cursor];
+  if(location.hash!=='#quiz' || input.closest('#question-form')!==document.querySelector('#question-form') || !input.checked || !q.options.some(option=>option.id===input.value))return;
+  state.answers[q.id]=input.value;state.completedAt=null;saveState();
+  const feedback=document.querySelector('#degree-feedback');
+  feedback.textContent=q.options.find(option=>option.id===input.value).text;feedback.classList.add('has-selection');
+  const count=validateAnswers(state.answers).answered;
+  const progress=document.querySelector('[role="progressbar"]');progress.setAttribute('aria-valuenow',count);
+  document.querySelector('.progress-value').style.width=`${count/QUESTIONS.length*100}%`;
+  document.querySelectorAll('.question-dot')[state.cursor]?.classList.add('answered');
+  cancelPendingAdvance();
+  if(!auto)return;
+  document.querySelector('#keep-answer').hidden=true;
+  document.querySelector('#auto-advance-hint').textContent=state.cursor===QUESTIONS.length-1?'已保存，正在整理你的报告…':'已保存，即将进入下一题…';
+  autoAdvance.request({record:state,generation:quizGeneration,cursor:state.cursor,questionId:q.id,answer:input.value,form:document.querySelector('#question-form')});
+}
 
 function loadState() {
   try { return restoreScaleState(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')); }
@@ -42,6 +75,7 @@ function toast(message) {
   toastTimeout = setTimeout(() => el.classList.remove('visible'), 3200);
 }
 function navigate(hash) {
+  cancelPendingAdvance();
   infoDialog.close(); shareDialog.close();
   if (location.hash === hash) renderRoute(); else location.hash = hash;
 }
@@ -59,7 +93,7 @@ function nav() {
   return `<header class="wrap nav"><a class="logo" href="#home" aria-label="见古首页"><span class="seal" aria-hidden="true">见</span><span><span class="brand-name">见古</span><span class="brand-en">JIANGU</span></span></a><span class="nav-center">以古为镜，照见自己。</span><nav class="nav-links" aria-label="主导航"><a class="nav-library" href="#home" data-action="library">人物小传</a><button class="plain-button" data-action="about">关于见古</button><a class="nav-start" href="#quiz" data-action="start">开始探索 ↗</a></nav></header>`;
 }
 function footer() {
-  return `<footer class="wrap site-footer"><p class="footer-note">见古 0.3 · 与世界历史人物相遇。人物匹配是编辑性解读，未经心理测量验证。画像为艺术演绎。<br>© 2026 见古 · 历史很远，相似的心事很近。</p><div class="footer-actions"><button data-action="method">匹配依据</button><button data-action="privacy">本机数据</button></div></footer>`;
+  return `<footer class="wrap site-footer"><p class="footer-note">见古 0.4 · 与世界历史人物相遇。人物匹配是编辑性解读，未经心理测量验证。画像为艺术演绎。<br>© 2026 见古 · 历史很远，相似的心事很近。</p><div class="footer-actions"><button data-action="method">匹配依据</button><button data-action="privacy">本机数据</button></div></footer>`;
 }
 function focusMain() {
   requestAnimationFrame(() => { const el = document.querySelector('#main-content'); el?.focus({ preventScroll:true }); window.scrollTo(0, 0); });
@@ -114,6 +148,7 @@ function renderCatalog() {
 
 function chapterFor(index) { return index < 14 ? 0 : index < 28 ? 1 : index < 34 ? 2 : 3; }
 function renderQuiz() {
+  cancelPendingAdvance();quizGeneration++;keyboardBrowsingQuestion=null;
   currentReport = null; document.title = '认识自己 · 见古';
   const q = QUESTIONS[state.cursor];
   const selected = q.options.find(option=>option.id===state.answers[q.id]);
@@ -129,13 +164,14 @@ function renderQuiz() {
         <div class="progress-track" role="progressbar" aria-label="已回答题数" aria-valuemin="0" aria-valuemax="${QUESTIONS.length}" aria-valuenow="${completedCount}"><div class="progress-value" style="width:${completedCount/QUESTIONS.length*100}%"></div></div>
         ${state.cursor===28?'<p class="chapter-break">接下来，看看此刻的你。</p>':state.cursor===34?'<p class="chapter-break">最后两句，回到平常的自己。</p>':''}
         <p class="question-label">${String(state.cursor+1).padStart(2,'0')} · ${q.kind==='context'?'此刻的你':'平常的你'}</p>
-        <form id="question-form"><fieldset aria-describedby="question-hint"><legend class="question-title">${escape(q.title)}</legend><p id="question-hint" class="question-hint">${escape(q.hint)}</p>
+        <form id="question-form"><fieldset aria-describedby="question-hint auto-advance-hint"><legend class="question-title">${escape(q.title)}</legend><p id="question-hint" class="question-hint">${escape(q.hint)}</p>
           <div class="degree-scale">
             <div class="degree-labels" aria-hidden="true"><span>非常不符合</span><span>不确定</span><span>非常符合</span></div>
             <div class="degree-options">${q.options.map((option,i)=>`<label class="degree-option" style="--dot-size:${sizes[i]}px"><input type="radio" name="answer" value="${option.id}" aria-label="${escape(option.text)}" ${selected?.id===option.id?'checked':''} required><span class="degree-dot" aria-hidden="true"><span>✓</span></span></label>`).join('')}</div>
             <p id="degree-feedback" class="degree-feedback ${selected?'has-selection':''}" role="status" aria-live="polite">${selected?escape(selected.text):'选择这句话有多像你'}</p>
           </div>
-        </fieldset><div class="quiz-actions"><button type="button" class="plain-button" data-action="previous" ${state.cursor===0?'disabled':''}>← 上一题</button><button id="next-question" type="submit" class="button" ${!selected?'disabled':''}>${state.cursor===QUESTIONS.length-1?'遇见我的历史人格':'下一题'}<span class="arrow" aria-hidden="true">→</span></button></div></form>
+          <p id="auto-advance-hint" class="quiz-save">${AUTO_ADVANCE_HINT}</p>
+        </fieldset><div class="quiz-actions"><button type="button" class="plain-button" data-action="previous" ${state.cursor===0?'disabled':''}>← 上一题</button><button id="keep-answer" type="button" class="text-button" data-action="keep-answer" ${!selected?'hidden':''}>保留此答案并继续 ↗</button></div></form>
         ${validateAnswers(state.answers).complete?'<div class="quiz-update"><button class="text-button" data-action="update-report">修改好了，更新报告 ↗</button></div>':''}
         <div class="question-dots" aria-hidden="true">${QUESTIONS.map((question,i)=>`<span class="question-dot ${state.answers[question.id]?'answered':''} ${i===state.cursor?'current':''}"></span>`).join('')}</div>
         <p class="quiz-save">${storageAvailable?'进度自动保存，可稍后继续':'浏览器未允许保存，请保持此页打开'}<button class="plain-button" data-action="save-exit">　暂存退出</button></p>
@@ -143,6 +179,7 @@ function renderQuiz() {
     </main>`;
 }
 function advanceQuestion() {
+  cancelPendingAdvance();
   const q = QUESTIONS[state.cursor];
   if (!q.options.some(o => o.id === state.answers[q.id])) { toast('先选择最接近你的一项。'); return; }
   if (state.cursor === QUESTIONS.length-1) {
@@ -282,6 +319,7 @@ function renderReport(sample = false, sampleId = 'su-shi', legacy = false) {
 }
 
 function showInfo(title,html) {
+  cancelPendingAdvance();
   if(!infoDialog.open)dialogReturnFocus=document.activeElement;
   document.querySelector('#info-content').innerHTML = `<div class="dialog-top"><span id="info-title">${escape(title)}</span><button class="close-button" data-action="close-info" aria-label="关闭对话框">×</button></div><div class="dialog-body">${html}</div>`;
   if(!infoDialog.open)infoDialog.showModal();
@@ -345,6 +383,7 @@ async function buildPoster(canvas,report) {
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Export failed')),'image/png'));
 }
 async function showShare() {
+  cancelPendingAdvance();
   if (!currentReport) return;
   const generation=++posterGeneration;
   posterBlob=null;
@@ -380,6 +419,7 @@ function downloadPoster() {
 }
 
 function renderRoute() {
+  cancelPendingAdvance();
   const hash=location.hash;
   if (hash==='#quiz') renderQuiz();
   else if (hash==='#report') renderReport(false,'su-shi',!state.completedAt && !!legacyState);
@@ -394,22 +434,45 @@ document.addEventListener('input',event=>{if(event.target.id==='people-search'){
 document.addEventListener('change',event=>{
   if(event.target.id==='people-region'){libraryRegion=event.target.value;libraryLimit=8;renderCatalog();return;}
   if (event.target.matches('#question-form input[name="answer"]')) {
-    const q=QUESTIONS[state.cursor];const id=event.target.value;
-    if (!q.options.some(o=>o.id===id)) return;
-    state.answers[q.id]=id;state.completedAt=null;saveState();
-    document.querySelector('#next-question').disabled=false;
-    const feedback=document.querySelector('#degree-feedback');feedback.textContent=q.options.find(option=>option.id===id).text;feedback.classList.add('has-selection');
-    const count=validateAnswers(state.answers).answered;
-    const progress=document.querySelector('[role="progressbar"]');progress.setAttribute('aria-valuenow',count);
-    document.querySelector('.progress-value').style.width=`${count/36*100}%`;
-    document.querySelectorAll('.question-dot')[state.cursor]?.classList.add('answered');
+    chooseDegree(event.target,keyboardBrowsingQuestion!==QUESTIONS[state.cursor]?.id);
   }
 });
-document.addEventListener('submit',event=>{if(event.target.id==='question-form'){event.preventDefault();advanceQuestion();}});
+document.addEventListener('pointerdown',event=>{
+  if(event.target.closest('.degree-option'))keyboardBrowsingQuestion=null;
+  else if(event.target.closest('a,button,dialog'))cancelPendingAdvance();
+},true);
+document.addEventListener('click',event=>{
+  // Suppress the second activation of a mouse double-click, including one landing after a render.
+  if(event.detail>1 && event.target.closest('.degree-option')){event.preventDefault();event.stopImmediatePropagation();}
+},true);
+document.addEventListener('keydown',event=>{
+  const input=event.target.closest('#question-form input[name="answer"]');
+  if(event.key==='Tab' || event.key==='Escape')cancelPendingAdvance();
+  if(!input)return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){
+    keyboardBrowsingQuestion=QUESTIONS[state.cursor].id;cancelPendingAdvance();
+  } else if(event.key==='Enter' || event.key===' '){
+    event.preventDefault();if(event.repeat)return;
+    keyboardBrowsingQuestion=null;input.checked=true;chooseDegree(input,true);
+  }
+});
+document.addEventListener('keyup',event=>{if(event.key===' ' && event.target.matches('#question-form input[name="answer"]'))event.preventDefault();});
+document.addEventListener('submit',event=>{
+  if(event.target.id!=='question-form')return;
+  event.preventDefault();
+  const input=event.target.querySelector('input[name="answer"]:checked');
+  if(input){keyboardBrowsingQuestion=null;chooseDegree(input,true);}
+});
 document.addEventListener('click',event=>{
   if(event.target.closest('.skip-link')){event.preventDefault();const main=document.querySelector('#main-content');main?.focus();main?.scrollIntoView();return;}
+  const input=event.target.closest('#question-form input[name="answer"]');
+  if(input){
+    if(event.detail>0)keyboardBrowsingQuestion=null;
+    chooseDegree(input,keyboardBrowsingQuestion!==QUESTIONS[state.cursor]?.id);return;
+  }
   const button=event.target.closest('[data-action]');if(!button || button.disabled)return;
   const action=button.dataset.action;
+  cancelPendingAdvance();
   event.preventDefault();
   switch(action){
     case 'start': {
@@ -431,6 +494,7 @@ document.addEventListener('click',event=>{
     case 'privacy': showPrivacy();break;
     case 'person': showPerson(button.dataset.id);break;
     case 'previous': if(state.cursor>0){state.cursor--;saveState();renderQuiz();focusMain();}break;
+    case 'keep-answer': advanceQuestion();break;
     case 'save-exit': saveState();navigate('#home');toast(storageAvailable?'进度已保存，下次可以继续。':'本浏览器未允许保存，请保持当前页打开。');break;
     case 'review': state.cursor=0;saveState();navigate('#quiz');break;
     case 'update-report': if(validateAnswers(state.answers).complete){Object.assign(state,refreshResult(state.answers,state));state.completedAt=new Date().toISOString();saveState();readingStruggle=null;readingEvent=null;navigate('#report');}break;
@@ -453,5 +517,6 @@ document.addEventListener('click',event=>{
 for(const dialog of [infoDialog,shareDialog])dialog.addEventListener('click',event=>{if(event.target===dialog){const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close();}});
 for(const dialog of [infoDialog,shareDialog])dialog.addEventListener('close',()=>{const target=dialogReturnFocus;dialogReturnFocus=null;if(target?.isConnected)target.focus({preventScroll:true});});
 window.addEventListener('hashchange',()=>{readingStruggle=null;readingEvent=null;renderRoute();});
-window.addEventListener('pagehide',saveState);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelPendingAdvance();});
+window.addEventListener('pagehide',()=>{cancelPendingAdvance();saveState();});
 renderRoute();
