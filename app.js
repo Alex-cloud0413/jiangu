@@ -1,10 +1,10 @@
 import { PEOPLE, STRUGGLES } from './content.js?v=0.2.0';
-import { DIMENSIONS, QUESTIONS, calculateProfile, getContext, getAnswerEvidence, validateAnswers } from './quiz.js?v=0.2.0';
-import { createResult, refreshResult, resolveResult } from './results.js?v=0.2.0';
+import { DIMENSIONS, QUESTIONS, calculateProfile, getContext, getAnswerEvidence, validateAnswers } from './quiz.js?v=0.3.0';
+import { createResult, refreshResult, resolveResult } from './results.js?v=0.3.0';
 import { catalogPeople, REGION_ORDER } from './catalog.js?v=0.2.0';
-import { createExampleAnswers } from './examples.js?v=0.2.0';
+import { createExampleAnswers } from './examples.js?v=0.3.0';
 
-const STORAGE_KEY = 'jiangu:v1';
+import { STORAGE_KEY, LEGACY_STORAGE_KEY, emptyState, restoreScaleState, restoreLegacyState } from './session.js?v=0.3.0';
 const app = document.querySelector('#app');
 const infoDialog = document.querySelector('#info-dialog');
 const shareDialog = document.querySelector('#share-dialog');
@@ -12,6 +12,7 @@ const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&a
 const arrow = '<span class="arrow" aria-hidden="true">↗</span>';
 let storageAvailable = true;
 let state = loadState();
+let legacyState = loadLegacyState();
 let currentReport = null;
 let readingStruggle = null;
 let readingEvent = null;
@@ -24,17 +25,13 @@ let libraryLimit = 8;
 let dialogReturnFocus = null;
 
 function loadState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (!saved || saved.version !== 1 || !saved.answers || typeof saved.answers !== 'object' || Array.isArray(saved.answers)) return emptyState();
-    const answers = {};
-    QUESTIONS.forEach(q => { if (q.options.some(o => o.id === saved.answers[q.id])) answers[q.id] = saved.answers[q.id]; });
-    const complete = validateAnswers(answers).complete;
-    const previous = complete && (saved.completedAt || saved.resultPersonId) ? resolveResult(answers,saved) : null;
-    return {version:1,answers,cursor:Number.isInteger(saved.cursor) ? Math.max(0,Math.min(QUESTIONS.length-1,saved.cursor)) : 0,completedAt:complete ? saved.completedAt || null : null,resultPersonId:previous?.person.id || null,resultLibraryVersion:previous?.libraryVersion || null,resultPoolSize:previous?.poolSize || null,resultAnswerSignature:previous?.answerSignature || null};
-  } catch { return emptyState(); }
+  try { return restoreScaleState(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')); }
+  catch { return emptyState(); }
 }
-function emptyState() { return {version:1,answers:{},cursor:0,completedAt:null,resultPersonId:null,resultLibraryVersion:null,resultPoolSize:null,resultAnswerSignature:null}; }
+function loadLegacyState() {
+  try { return restoreLegacyState(JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || 'null')); }
+  catch { return null; }
+}
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch { storageAvailable = false; }
@@ -62,7 +59,7 @@ function nav() {
   return `<header class="wrap nav"><a class="logo" href="#home" aria-label="见古首页"><span class="seal" aria-hidden="true">见</span><span><span class="brand-name">见古</span><span class="brand-en">JIANGU</span></span></a><span class="nav-center">以古为镜，照见自己。</span><nav class="nav-links" aria-label="主导航"><a class="nav-library" href="#home" data-action="library">人物小传</a><button class="plain-button" data-action="about">关于见古</button><a class="nav-start" href="#quiz" data-action="start">开始探索 ↗</a></nav></header>`;
 }
 function footer() {
-  return `<footer class="wrap site-footer"><p class="footer-note">见古 0.2 · 与世界历史人物相遇。人物匹配是编辑性解读，未经心理测量验证。画像为艺术演绎。<br>© 2026 见古 · 历史很远，相似的心事很近。</p><div class="footer-actions"><button data-action="method">匹配依据</button><button data-action="privacy">本机数据</button></div></footer>`;
+  return `<footer class="wrap site-footer"><p class="footer-note">见古 0.3 · 与世界历史人物相遇。人物匹配是编辑性解读，未经心理测量验证。画像为艺术演绎。<br>© 2026 见古 · 历史很远，相似的心事很近。</p><div class="footer-actions"><button data-action="method">匹配依据</button><button data-action="privacy">本机数据</button></div></footer>`;
 }
 function focusMain() {
   requestAnimationFrame(() => { const el = document.querySelector('#main-content'); el?.focus({ preventScroll:true }); window.scrollTo(0, 0); });
@@ -80,13 +77,14 @@ function renderHome() {
         <h1>在历史里，<br><em>遇见另一个你。</em></h1>
         <p class="hero-description">你的性格，像历史上的哪一个人？<br>跨越时代与地域，找到面对当下的新视角。</p>
         <div class="hero-actions"><button class="button" data-action="${completed ? 'my-report' : 'start'}">${startText}${arrow}</button><button class="text-button" data-action="sample">先读一份报告 ↗</button></div>
-        <div class="hero-meta"><span>36 道单选</span><span>约 10 分钟</span><span>无需登录</span></div>
+        ${legacyState?'<p class="legacy-home-link"><button class="text-button" data-action="legacy-report">查看我之前的报告 ↗</button></p>':''}
+        <div class="hero-meta"><span>36 道程度题</span><span>约 10 分钟</span><span>无需登录</span></div>
         <div class="portrait-strip" aria-label="世界人物插画">
           ${featured.map(person=>`<div class="portrait-card">${portrait(person,'',true)}<div class="portrait-caption"><strong>${escape(person.name)}</strong><span>${escape(person.title)}</span></div></div>`).join('')}
         </div>
       </section>
       <section class="journey" aria-label="探索的三个阶段">
-        ${[['01','从日常选择，认识自己','不用成为理想中的谁，选最像平常的你。'],['02','与一位历史人物相遇','读懂相近之处，也保留你们的不同。'],['03','从他的经历，照见当下','看看曾经的选择、代价，以及今天的一小步。']].map(([n,t,d])=>`<div class="journey-item"><span class="journey-number">${n}</span><div><h2 class="journey-title">${t}</h2><p class="journey-description">${d}</p></div></div>`).join('')}
+        ${[['01','从一句话，认识自己','一句短陈述，选出它有多像你。'],['02','与一位历史人物相遇','读懂相近之处，也保留你们的不同。'],['03','从他的经历，照见当下','看看曾经的选择、代价，以及今天的一小步。']].map(([n,t,d])=>`<div class="journey-item"><span class="journey-number">${n}</span><div><h2 class="journey-title">${t}</h2><p class="journey-description">${d}</p></div></div>`).join('')}
       </section>
       <section id="people-library" class="section" aria-labelledby="library-title">
         <div class="section-heading"><div><p class="eyebrow">人物小传 · 世界篇</p><h2 id="library-title">不同的人生，相似的心事。</h2></div><p>${PEOPLE.length} 位人物，跨越不同地区与时代。<br>探索、创作、求知，也学习与生活相处。</p></div>
@@ -118,10 +116,31 @@ function chapterFor(index) { return index < 14 ? 0 : index < 28 ? 1 : index < 34
 function renderQuiz() {
   currentReport = null; document.title = '认识自己 · 见古';
   const q = QUESTIONS[state.cursor];
+  const selected = q.options.find(option=>option.id===state.answers[q.id]);
   const completedCount = validateAnswers(state.answers).answered;
-  const chapters = [['认识平常的你','日常与相处 · 01—14'],['看见你的选择','判断与行动 · 15—28'],['此刻的你','最近的处境 · 29—34'],['再多认识一点','最后两问 · 35—36']];
+  const chapters = [['认识平常的你','日常与相处 · 01—14'],['看见你的选择','判断与行动 · 15—28'],['此刻的你','最近的处境 · 29—34'],['再多认识一点','最后两句 · 35—36']];
   const active = chapterFor(state.cursor);
-  app.innerHTML = `${nav()}<main id="main-content" class="wrap quiz-layout fade-in" tabindex="-1"><aside class="quiz-sidebar"><p class="eyebrow">YOUR OWN STORY</p><h2>答案没有好坏，<br>只需像你。</h2>${chapters.map(([t,s],i) => `<div class="chapter ${active === i ? 'active' : ''}"><span class="mono">0${i+1}</span><div><p class="chapter-title">${t}</p><p class="chapter-sub">${s}</p></div></div>`).join('')}<p class="sidebar-note">按平常的自己作答，<br>不必成为任何人的理想答案。<br><br>你可以随时返回修改。</p><button class="plain-button" data-action="save-exit">保存，稍后继续 ↗</button></aside><div class="quiz-main"><div class="question-progress"><span>${escape(chapters[active][0])}</span><span class="mono">${String(state.cursor+1).padStart(2,'0')} / 36</span></div><div class="progress-track" role="progressbar" aria-label="已回答题数" aria-valuemin="0" aria-valuemax="36" aria-valuenow="${completedCount}"><div class="progress-value" style="width:${completedCount/36*100}%"></div></div>${state.cursor === 28 ? '<p class="chapter-break">性格画像已初步成形。接下来，聊聊你最近的处境。</p>' : ''}${state.cursor === 34 ? '<p class="chapter-break">最后两问。让这个历史身影，再清晰一点。</p>' : ''}<p class="question-label">QUESTION ${String(state.cursor+1).padStart(2,'0')} · ${q.kind === 'context' ? '当下的处境' : '平常的你'}</p><form id="question-form"><fieldset><legend class="question-title">${escape(q.title)}</legend><p class="question-hint">${escape(q.hint)}</p><div class="options">${q.options.map((o,i) => `<label class="option"><input type="radio" name="answer" value="${o.id}" ${state.answers[q.id] === o.id ? 'checked' : ''} required><span class="option-letter" aria-hidden="true">${String.fromCharCode(65+i)}</span><span>${escape(o.text)}</span><span class="option-mark" aria-hidden="true">✓</span></label>`).join('')}</div></fieldset><div class="quiz-actions"><button type="button" class="plain-button" data-action="previous" ${state.cursor === 0 ? 'disabled' : ''}>← 上一题</button><button id="next-question" type="submit" class="button" ${!state.answers[q.id] ? 'disabled' : ''}>${state.cursor === QUESTIONS.length-1 ? '遇见我的历史人格' : '下一题'}<span class="arrow" aria-hidden="true">→</span></button></div></form>${validateAnswers(state.answers).complete ? '<div class="quiz-update"><button class="text-button" data-action="update-report">修改好了，更新报告 ↗</button></div>' : ''}<div class="question-dots" aria-hidden="true">${QUESTIONS.map((item,i) => `<span class="question-dot ${state.answers[item.id] ? 'answered' : ''} ${i === state.cursor ? 'current' : ''}"></span>`).join('')}</div><p class="quiz-save">${storageAvailable ? '进度自动保存在本浏览器 · 退出后可以继续' : '浏览器未允许保存进度 · 请保持此页打开'}<button class="plain-button" data-action="save-exit">　暂存退出</button></p></div></main>`;
+  const sizes = [44,36,30,24,30,36,44];
+  app.innerHTML = `${nav()}
+    <main id="main-content" class="wrap quiz-layout scale-quiz" tabindex="-1">
+      <aside class="quiz-sidebar"><p class="eyebrow">YOUR OWN STORY</p><h2>答案没有好坏，<br>只需像你。</h2>${chapters.map(([title,sub],i)=>`<div class="chapter ${active===i?'active':''}"><span class="mono">0${i+1}</span><div><p class="chapter-title">${title}</p><p class="chapter-sub">${sub}</p></div></div>`).join('')}<p class="sidebar-note">按第一反应作答。<br>你可以随时返回修改。</p><button class="plain-button" data-action="save-exit">保存，稍后继续 ↗</button></aside>
+      <div class="quiz-main">
+        <div class="question-progress"><span>${escape(chapters[active][0])}</span><span class="mono">${String(state.cursor+1).padStart(2,'0')} / ${QUESTIONS.length}</span></div>
+        <div class="progress-track" role="progressbar" aria-label="已回答题数" aria-valuemin="0" aria-valuemax="${QUESTIONS.length}" aria-valuenow="${completedCount}"><div class="progress-value" style="width:${completedCount/QUESTIONS.length*100}%"></div></div>
+        ${state.cursor===28?'<p class="chapter-break">接下来，看看此刻的你。</p>':state.cursor===34?'<p class="chapter-break">最后两句，回到平常的自己。</p>':''}
+        <p class="question-label">${String(state.cursor+1).padStart(2,'0')} · ${q.kind==='context'?'此刻的你':'平常的你'}</p>
+        <form id="question-form"><fieldset aria-describedby="question-hint"><legend class="question-title">${escape(q.title)}</legend><p id="question-hint" class="question-hint">${escape(q.hint)}</p>
+          <div class="degree-scale">
+            <div class="degree-labels" aria-hidden="true"><span>非常不符合</span><span>不确定</span><span>非常符合</span></div>
+            <div class="degree-options">${q.options.map((option,i)=>`<label class="degree-option" style="--dot-size:${sizes[i]}px"><input type="radio" name="answer" value="${option.id}" aria-label="${escape(option.text)}" ${selected?.id===option.id?'checked':''} required><span class="degree-dot" aria-hidden="true"><span>✓</span></span></label>`).join('')}</div>
+            <p id="degree-feedback" class="degree-feedback ${selected?'has-selection':''}" role="status" aria-live="polite">${selected?escape(selected.text):'选择这句话有多像你'}</p>
+          </div>
+        </fieldset><div class="quiz-actions"><button type="button" class="plain-button" data-action="previous" ${state.cursor===0?'disabled':''}>← 上一题</button><button id="next-question" type="submit" class="button" ${!selected?'disabled':''}>${state.cursor===QUESTIONS.length-1?'遇见我的历史人格':'下一题'}<span class="arrow" aria-hidden="true">→</span></button></div></form>
+        ${validateAnswers(state.answers).complete?'<div class="quiz-update"><button class="text-button" data-action="update-report">修改好了，更新报告 ↗</button></div>':''}
+        <div class="question-dots" aria-hidden="true">${QUESTIONS.map((question,i)=>`<span class="question-dot ${state.answers[question.id]?'answered':''} ${i===state.cursor?'current':''}"></span>`).join('')}</div>
+        <p class="quiz-save">${storageAvailable?'进度自动保存，可稍后继续':'浏览器未允许保存，请保持此页打开'}<button class="plain-button" data-action="save-exit">　暂存退出</button></p>
+      </div>
+    </main>`;
 }
 function advanceQuestion() {
   const q = QUESTIONS[state.cursor];
@@ -140,7 +159,7 @@ function makeSample(id = 'su-shi') {
   const person = PEOPLE.find(p => p.id === id) || PEOPLE.find(p => p.id === 'su-shi');
   const answers = createExampleAnswers(person.vector);
   const context = getContext(answers);
-  return {person,answers,profile:calculateProfile(answers),context,sample:true,poolSize:PEOPLE.length,isLegacy:false};
+  return {person,answers,profile:calculateProfile(answers),context,sample:true,poolSize:PEOPLE.length,isLegacy:false,assessmentVersion:'scale-v1',isLegacyAssessment:false};
 }
 const preferenceCopy = {
   expression: [ ['先让想法在心里长好','你更习惯先整理，再选择合适的人和时机表达。'], ['在交流中长出想法','你常常通过说出来、听回应，让想法逐渐清晰。'], ['表达，也保留独处','你会在独自消化和与人交流之间，寻找合适的节奏。'] ],
@@ -162,7 +181,7 @@ function similarityCards(report) {
       const personPreference = personSide === 2 ? '两端之间' : personSide === 0 ? d.left : d.right;
       const yourPreference = side === 2 ? '会在两端之间切换' : `更偏向${side === 0 ? d.left : d.right}`;
       const description = close ? `${preferenceDescription} 这是你与这份${report.person.name}画像较接近的一面。` : `你的选择${yourPreference}；这份${report.person.name}画像的位置更接近${personPreference}。相近的人也会有不同之处，不必把这一面套在自己身上。`;
-      const evidence = getAnswerEvidence(report.answers,d.id).sort((a,b) => Math.abs(a.value-v)-Math.abs(b.value-v))[0];
+      const evidence = getAnswerEvidence(report.answers,d.id,report.assessmentVersion).sort((a,b) => Math.abs(a.value-v)-Math.abs(b.value-v))[0];
       return `<article class="similarity"><p class="eyebrow">0${i+1} · ${escape(d.label)} · ${close ? '相近' : '有别'}</p><h3>${title}</h3><p>${escape(description)}</p>${evidence ? `<details class="answer-evidence"><summary>${report.sample ? '示例答案依据' : '看看你的答题依据'}<span aria-hidden="true">＋</span></summary><p>${escape(evidence.title)}</p><blockquote>${escape(evidence.answer)}</blockquote></details>` : ''}</article>`;
     }).join('');
 }
@@ -200,26 +219,27 @@ function eventRows(report,event) {
   const focus=report.context.focus || 'daily-life';
   return `<p class="reading-focus">${escape(captions[focus] || captions['daily-life'])}</p><dl>${(orders[focus] || orders['daily-life']).map(key=>sections[key]).join('')}</dl>`;
 }
-function renderReport(sample = false, sampleId = 'su-shi') {
-  if (!sample && (!validateAnswers(state.answers).complete || !state.completedAt)) {
+function renderReport(sample = false, sampleId = 'su-shi', legacy = false) {
+  const record = legacy ? legacyState : state;
+  if (!sample && (!record?.completedAt || !validateAnswers(record.answers,record.assessmentVersion).complete)) {
     toast('完成答题后，就能打开你的报告。'); navigate('#quiz'); return;
   }
-  const stored = sample ? null : resolveResult(state.answers,state);
-  const report = sample ? makeSample(sampleId) : {person:stored.person,answers:state.answers,profile:stored.profile,context:getContext(state.answers),sample:false,poolSize:stored.poolSize,isLegacy:stored.isLegacy};
+  const stored = sample ? null : resolveResult(record.answers,record);
+  if (!sample && !stored) { navigate('#quiz'); return; }
+  const report = sample ? makeSample(sampleId) : {person:stored.person,answers:record.answers,profile:stored.profile,context:stored.context,sample:false,poolSize:stored.poolSize,isLegacy:stored.isLegacy,assessmentVersion:stored.assessmentVersion,isLegacyAssessment:stored.isLegacyAssessment};
   currentReport = report;
   const person = report.person;
   const selectedStruggle = readingStruggle ?? report.context.struggle;
   const struggle = STRUGGLES.find(item=>item.id===selectedStruggle);
   const event = getReadingEvent(report,selectedStruggle);
   const direct = event.struggleKeys.includes(selectedStruggle);
-  const contextQuestion = QUESTIONS.find(question=>question.id==='q30');
-  const contextAnswer = contextQuestion?.options.find(option=>option.id===report.answers.q30);
+  const contextEvidence = report.context.struggleEvidence;
   const nameClass = person.name.length>6 ? 'long-name' : person.name.length>3 ? 'medium-name' : '';
   document.title = `${sample?'示例报告':'我的历史人格'}：${person.name} · 见古`;
   app.innerHTML = `${nav()}
     ${sample?'<div class="sample-banner"><strong>示例报告 · 非你的测试结果</strong><span>使用预设答案展示阅读体验，不会覆盖你的作答。</span></div>':''}
     <main id="main-content" class="report-container" tabindex="-1">
-      ${!sample&&report.isLegacy?`<div class="legacy-notice"><div><strong>你原来的报告，已为你保留。</strong><p>人物库现已扩展到 ${PEOPLE.length} 位世界人物。可以保留原答案，主动探索一次新的匹配。</p></div><button class="button outline" data-action="rematch">用原答案重新匹配 ↗</button></div>`:''}
+      ${!sample&&report.isLegacyAssessment?`<div class="legacy-notice"><div><strong>这是你之前的报告。</strong><p>原来的结果已保留。现在可以用简短的程度题，再认识自己一次。</p></div><button class="button outline" data-action="new-quiz">体验新版题目 ↗</button></div>`:''}
       <section class="report-hero">
         <div class="report-heading">
           <p class="kicker">${sample?'一次历史相遇的示例':`本次 ${report.poolSize} 位候选人物中，你更接近`}</p>
@@ -245,7 +265,7 @@ function renderReport(sample = false, sampleId = 'su-shi') {
         <div class="report-section-heading"><span class="mono">03</span><h2 tabindex="-1">${struggle?'当你也走到这样的时刻。':'看看，一段人生如何转弯。'}</h2></div>
         <p class="report-intro">${struggle?escape(struggle.prompt):'你选择了暂时没有明确困境。可以把这些经历当作一次阅读，或选择感兴趣的角度。'}</p>
         <div class="struggle-tabs" role="group" aria-label="切换经历阅读角度">${STRUGGLES.map(item=>`<button class="struggle-tab ${item.id===selectedStruggle?'active':''}" data-action="struggle" data-id="${item.id}" aria-pressed="${item.id===selectedStruggle}">${escape(item.short)}</button>`).join('')}</div>
-        ${!sample&&struggle&&selectedStruggle===report.context.struggle&&contextAnswer?`<p class="context-echo">你提到，自己最近更接近：${escape(contextAnswer.text)}。</p>`:''}
+        ${!sample&&struggle&&selectedStruggle===report.context.struggle&&contextEvidence?`<p class="context-echo">你提到，「${escape(contextEvidence.title)}」对你来说是“${escape(contextEvidence.answerText)}”。</p>`:''}
         <article class="event"><p class="event-overline">人生片段 · ${escape(event.period)}</p><h3 tabindex="-1">${escape(event.title)}</h3>
           ${struggle&&!direct?'<p class="analogy-note">没有找到与这一困境直接对应的片段，以下提供一个相邻视角。</p>':''}
           ${eventRows(report,event)}
@@ -256,8 +276,8 @@ function renderReport(sample = false, sampleId = 'su-shi') {
         ${struggle?`<div class="action-note"><span class="action-seal" aria-hidden="true">今日<br>一小步</span><div><h3>${report.context.goal==='understanding'?'先看清楚，再决定往哪里走。':'把一个新视角，变成一件小事。'}</h3><p>${escape(struggle.action)}</p><p>${escape(contextAdjustment(report.context))}</p></div></div>`:''}
         <p class="section-note">阅读角度可以改变，人物仍由性格答案决定。现代启发是见古的解读，不是古人的原话。</p>
       </section>
-      <section class="report-end"><h2>下一页，仍由你来写。</h2><p>把这次相遇留在身边，或邀请朋友寻找自己的历史人格。</p><div class="end-actions"><button class="button" data-action="share">保存分享卡 ↗</button><button class="button outline" data-action="${sample?'start':'review'}">${sample?'开始我的探索':'修改我的答案'} →</button></div><button class="plain-button" data-action="${sample?'home':'restart'}">${sample?'返回首页':'重新开始一次'}</button></section>
-      <details class="method-details"><summary>匹配说明与全部史实来源</summary><p>这是初版的编辑性人格探索，未经心理测量验证。30道性格题形成四维偏好画像，与当前人物库做等权距离比较；6道处境题只选择经历和阅读侧重。同一版本、相同性格答案得到同一人物。图中的位置不是能力、命运或相似度百分比。</p><p>人物的思想和行为远比四个维度复杂。这里选取一部分有记录的人生侧面，称号与短句是原创解读；插画为艺术演绎。旧版报告会保留，只有你主动重新匹配时才使用扩充后的候选库。</p><ul>${person.sources.map(source=>`<li><a href="${escape(source.url)}" target="_blank" rel="noopener noreferrer">${escape(source.title)} ↗</a></li>`).join('')}</ul></details>
+      <section class="report-end"><h2>下一页，仍由你来写。</h2><p>把这次相遇留在身边，或邀请朋友寻找自己的历史人格。</p><div class="end-actions"><button class="button" data-action="share">保存分享卡 ↗</button><button class="button outline" data-action="${sample?'start':report.isLegacyAssessment?'new-quiz':'review'}">${sample?'开始我的探索':report.isLegacyAssessment?'体验新版题目':'修改我的答案'} →</button></div><button class="plain-button" data-action="${sample||report.isLegacyAssessment?'home':'restart'}">${sample||report.isLegacyAssessment?'返回首页':'重新开始一次'}</button></section>
+      <details class="method-details"><summary>匹配说明与全部史实来源</summary><p>这是初版的编辑性人格探索，未经心理测量验证。${report.isLegacyAssessment?'这份旧报告使用原来的四选一题目。':'36句陈述均使用七档符合程度作答。'}30道性格题形成四维偏好画像，与当前人物库做等权距离比较；6道处境题只影响经历与阅读侧重。同一版本、相同性格答案得到同一人物。图中的位置不是能力、命运或相似度百分比。</p><p>人物的思想和行为远比四个维度复杂。这里选取一部分有记录的人生侧面，称号与短句是原创解读；插画为艺术演绎。旧版报告保留原结果；新题目的答案独立保存，不会将旧选项解释成新的符合程度。</p><ul>${person.sources.map(source=>`<li><a href="${escape(source.url)}" target="_blank" rel="noopener noreferrer">${escape(source.title)} ↗</a></li>`).join('')}</ul></details>
     </main>${footer()}`;
 }
 
@@ -271,17 +291,17 @@ function showAbout() {
   showInfo('关于见古',`<p class="eyebrow">KNOW YOURSELF THROUGH HISTORY</p><h2>历史很远，<br>相似的心事很近。</h2><p>见古从你的日常选择出发，在 ${PEOPLE.length} 位世界历史人物中，找到一个与你的偏好相近的人。再从他的真实经历里，为你此刻的处境提供另一种看法。</p><h3>你会得到什么？</h3><p>一个人物、具体的相近与不同、一段与你关心的话题相关的经历，以及一张可以保存的人格卡。</p><h3>它还是一个初版。</h3><p>题目、人物画像和评分都在等待真实体验的检验。它是带有编辑性解读的探索，不是专业心理测评，也不预测你的人生。</p><button class="button" data-action="start">开始一次相遇${arrow}</button>`);
 }
 function showMethod() {
-  showInfo('匹配依据',`<h2>性格决定人物，<br>处境决定翻到哪一页。</h2><p>36道题全部单选。其中30道性格题观察表达、判断、行动与变化偏好；6道处境题了解最近的困扰、精力和期待。</p><h3>人物怎样选出来？</h3><p>性格选项按固定规则形成四维画像，再与 ${PEOPLE.length} 位人物的编辑画像做等权距离比较。当前处境不参与人物排名，也不使用随机抽取。</p><h3>历史内容从哪里来？</h3><p>每段经历附有对应文献或机构资料。我们区分历史事件、人格解读与现代建议，不给古人伪造引语，不将每段经历写成成功故事。</p><h3>需要保留的边界</h3><p>这些维度、题目和人物分数是待验证的产品假设，尚未经过心理测量验证。四个数字无法概括一个人，更不能测定历史人物的真实心理。这里呈现的是可解释的一次相近，而非对你的定义。</p>`);
+  showInfo('匹配依据',`<h2>性格决定人物，<br>处境决定翻到哪一页。</h2><p>每题只有一句短陈述，从“非常不符合”到“非常符合”选择一个程度，中间可以选“不确定”。其中30道性格题观察表达、判断、行动与变化偏好；6道处境题了解最近的困扰、精力和需要。</p><h3>人物怎样选出来？</h3><p>性格选项按固定规则形成四维画像，再与 ${PEOPLE.length} 位人物的编辑画像做等权距离比较。当前处境不参与人物排名，也不使用随机抽取。</p><h3>历史内容从哪里来？</h3><p>每段经历附有对应文献或机构资料。我们区分历史事件、人格解读与现代建议，不给古人伪造引语，不将每段经历写成成功故事。</p><h3>需要保留的边界</h3><p>这些维度、题目和人物分数是待验证的产品假设，尚未经过心理测量验证。四个数字无法概括一个人，更不能测定历史人物的真实心理。这里呈现的是可解释的一次相近，而非对你的定义。</p>`);
 }
 function showPrivacy() {
-  showInfo('答案留在本机',`<h2>把选择留给你。</h2><p>你的作答进度保存在当前浏览器的本地存储中。本应用不向服务器提交答案，也不建立个人账户。换设备、清理浏览器数据或使用无痕浏览，可能无法继续上次的答题。</p><h3>分享卡上有什么？</h3><p>只有人物、人格称号、三个标签与一句原创短句。没有你的具体答案、当前困境或内部评分。示例卡会保留“示例”标识。</p><p>如打开字体或史实来源等第三方服务，会适用对应网站的访问规则。</p><button class="button outline" data-action="clear-data">清除本机作答记录</button>`);
+  showInfo('答案留在本机',`<h2>把选择留给你。</h2><p>你的作答进度保存在当前浏览器的本地存储中。本应用不向服务器提交答案，也不建立个人账户。换设备、清理浏览器数据或使用无痕浏览，可能无法继续上次的答题。</p><h3>分享卡上有什么？</h3><p>只有人物、人格称号、三个标签与一句原创短句。没有你的具体答案、当前困境或内部评分。示例卡会保留“示例”标识。</p><p>如打开史实来源等第三方网站，会适用对应网站的访问规则。</p><button class="button outline" data-action="clear-data">清除本机作答记录</button>`);
 }
 function showPerson(id) {
   const p = PEOPLE.find(p => p.id === id); if (!p) return;
   showInfo('人物小传 · 编辑画像',`<div class="dialog-person">${portrait(p)}<div><p class="kicker">${escape(p.era)} · ${escape(p.lifespan)}</p><h2>${escape(p.name)}</h2><p>${escape(p.country)} · ${escape(p.role)}</p><div>${tags(p)}</div></div></div><h3>${escape(p.title)}</h3><p>${escape(p.summary)}</p><h3>可以翻阅的人生片段</h3><ul>${p.events.map(e => `<li>${escape(e.title)} · ${escape(e.period)}</li>`).join('')}</ul><h3>资料来源</h3><ul>${p.sources.map(s => `<li><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.title)} ↗</a></li>`).join('')}</ul><div class="dialog-actions"><button class="button" data-action="start">看看我与谁相近${arrow}</button><button class="button outline" data-action="sample-person" data-id="${p.id}">阅读这位人物的示例</button></div>`);
 }
 function showReset(clearOnly = false) {
-  showInfo('重新开始之前',`<h2>${clearOnly ? '清除这次作答？' : '再认识自己一次？'}</h2><p>这会清除当前浏览器中保存的答案与报告。已经下载的分享卡不受影响。</p><button class="button red-button" data-action="${clearOnly ? 'confirm-clear' : 'confirm-restart'}">${clearOnly ? '确认清除记录' : '清除记录，重新开始'}</button><button class="plain-button" style="margin-left:22px" data-action="close-info">保留记录</button>`);
+  showInfo('重新开始之前',`<h2>${clearOnly ? '清除这次作答？' : '再认识自己一次？'}</h2><p>${clearOnly?'这会清除本浏览器中新旧两版的作答记录。':'这会清除本次新版测试的答案，之前的旧报告仍会保留。'}已经下载的分享卡不受影响。</p><button class="button red-button" data-action="${clearOnly ? 'confirm-clear' : 'confirm-restart'}">${clearOnly ? '确认清除记录' : '清除记录，重新开始'}</button><button class="plain-button" style="margin-left:22px" data-action="close-info">保留记录</button>`);
 }
 function renderShared(id) {
   const p = PEOPLE.find(p => p.id === id);
@@ -362,7 +382,8 @@ function downloadPoster() {
 function renderRoute() {
   const hash=location.hash;
   if (hash==='#quiz') renderQuiz();
-  else if (hash==='#report') renderReport(false);
+  else if (hash==='#report') renderReport(false,'su-shi',!state.completedAt && !!legacyState);
+  else if (hash==='#legacy-report') renderReport(false,'su-shi',true);
   else if (hash==='#sample') renderReport(true);
   else if (hash.startsWith('#sample/')) renderReport(true,hash.slice(8));
   else if (hash.startsWith('#meet/')) renderShared(hash.slice(6));
@@ -377,6 +398,7 @@ document.addEventListener('change',event=>{
     if (!q.options.some(o=>o.id===id)) return;
     state.answers[q.id]=id;state.completedAt=null;saveState();
     document.querySelector('#next-question').disabled=false;
+    const feedback=document.querySelector('#degree-feedback');feedback.textContent=q.options.find(option=>option.id===id).text;feedback.classList.add('has-selection');
     const count=validateAnswers(state.answers).answered;
     const progress=document.querySelector('[role="progressbar"]');progress.setAttribute('aria-valuenow',count);
     document.querySelector('.progress-value').style.width=`${count/36*100}%`;
@@ -395,6 +417,8 @@ document.addEventListener('click',event=>{
       navigate('#quiz');break;
     }
     case 'my-report': navigate('#report');break;
+    case 'legacy-report': navigate('#legacy-report');break;
+    case 'new-quiz': navigate('#quiz');break;
     case 'sample': readingStruggle=null;readingEvent=null;navigate('#sample');break;
     case 'sample-person': readingStruggle=null;readingEvent=null;navigate('#sample/'+button.dataset.id);break;
     case 'home': navigate('#home');break;
@@ -414,11 +438,11 @@ document.addEventListener('click',event=>{
     case 'restart': showReset();break;
     case 'clear-data': showReset(true);break;
     case 'confirm-restart': state=emptyState();saveState();readingStruggle=null;readingEvent=null;navigate('#quiz');break;
-    case 'confirm-clear': state=emptyState();try{localStorage.removeItem(STORAGE_KEY);}catch{}navigate('#home');toast('本机作答记录已清除。');break;
+    case 'confirm-clear': state=emptyState();try{localStorage.removeItem(STORAGE_KEY);localStorage.removeItem(LEGACY_STORAGE_KEY);}catch{}legacyState=null;navigate('#home');toast('本机作答记录已清除。');break;
     case 'struggle': {
-      const y=window.scrollY;readingStruggle=button.dataset.id;readingEvent=null;renderReport(currentReport?.sample,currentReport?.person.id);window.scrollTo(0,y);document.querySelector(`.struggle-tab[data-id="${readingStruggle}"]`)?.focus({preventScroll:true});break;
+      const y=window.scrollY;readingStruggle=button.dataset.id;readingEvent=null;renderReport(currentReport?.sample,currentReport?.person.id,currentReport?.isLegacyAssessment);window.scrollTo(0,y);document.querySelector(`.struggle-tab[data-id="${readingStruggle}"]`)?.focus({preventScroll:true});break;
     }
-    case 'event': {readingEvent=button.dataset.id;renderReport(currentReport?.sample,currentReport?.person.id);document.querySelector('.event h3')?.focus({preventScroll:true});document.querySelector('.event')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});break;}
+    case 'event': {readingEvent=button.dataset.id;renderReport(currentReport?.sample,currentReport?.person.id,currentReport?.isLegacyAssessment);document.querySelector('.event h3')?.focus({preventScroll:true});document.querySelector('.event')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});break;}
     case 'share': showShare();break;
     case 'download': downloadPoster();break;
     case 'copy-share': copyShare();break;
